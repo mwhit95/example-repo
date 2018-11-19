@@ -1,0 +1,71 @@
+#!/bin/bash
+
+
+//get some of the indexes, better ones are on AWS
+GET _cat/aliases?v&s=index
+GET _cat/indices?v&s=index
+GET _cat/health?v
+GET _cat/shards/raw_apis*?v
+GET _cat/shards/raw_bci*?v
+
+//curl command do the same normal index command
+curl -XGET "http://elas00:9200/_cat/indices?v&s=index"
+
+//curl command to create a new idex and copy the old index over
+time curl -X POST "elas00:9200/_reindex?pretty" -H 'Content-Type: application/json' -d'
+{
+  "source": {
+    "index": "raw_apis_1541692178"
+  },
+  "dest": {
+    "index": "raw_apis_matt11-14"
+  }
+}
+'
+**** below is how to create a new index for use ****
+
+	//pulls down the mapping file
+  		aws s3 cp s3://dhs-trds-avdev/config/elasticsearch/src_mappings/apis-mapping.json ./trds/dist/apis-mapping.json --only-show-errors
+
+	//create a new index with the mapping file
+ 		curl -XPUT "elas00:9200/raw_apis_matt11-14_restore?pretty" -H 'Content-Type: application/json' \
+       		-d "@/trds/dist/apis-mapping.json"
+
+	//check out the index once it is created
+  		curl -XGET "elas00:9200/raw_apis_matt11-14_restore?pretty"
+*************
+//create a snapshot
+curl -X PUT "elas00:9200/apis/master" -H 'Content-Type: application/json' -d'
+{
+  "type": "fs",
+  "settings": {
+    "location": "my_backup_location"
+  }
+}
+'
+
+//used this snapshot to create one (wait for completion part gets proper time)
+time curl -XPUT "elas00:9200/_snapshot/apis/matt11-14?wait_for_completion=true" -H 'Content-Type: application/json' -d ' { "indices": "raw_apis_matt11-14", "ignore_unavailable": true, "include_global_state": false } '
+
+//restores a snapshot and replaces its index names with a regex (the pattern) with the replacement (rename_replacement)
+time curl -X POST "elas00:9200/_snapshot/apis/matt11-14/_restore?wait_for_completion=true" -H 'Content-Type: application/json' -d'
+{
+	"rename_pattern": "raw_apis_matt11-14",
+	"rename_replacement": "raw_apis_mattrestore11-14",
+	"indices": "raw_apis_matt11-14",
+	"include_aliases": false
+}
+'
+
+//generic snapshot restore
+curl -X POST "elas00:9200/_snapshot/apis/third/_restore" 
+
+// delete snap shot
+
+curl -X DELETE "elas00:9200/_snapshot/apis/matt11-14"
+
+14075341846022
+
+curl -X DELETE "elas00:9200/raw_apis_matt11-14"
+
+
